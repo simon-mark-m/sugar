@@ -14,9 +14,10 @@ eval tcltest::configure $argv
 # ----------------------------------------------------------------------------
 # Acceptance tests.
 #
-# These are tests aimed at the package as a whole. Constructing these first
-# as package did not start life with tests. So need to create some kind of
-# baseline / coverage, but trying to isolate functions for test
+# These are tests aimed at the package as a whole. 
+# I'm constructing these first as the package did not start life with tests. 
+# So, need to create some kind of baseline / coverage before trying to
+# isolate stuff or test
 # -----------------------------------------------------------------------------
 
 namespace import tcltest::test
@@ -27,7 +28,7 @@ namespace eval ::acceptance::test {
         set res {}
     }
     set CLEANUP {
-        namespace delete some-namespace
+        namespace delete macro-namespace
         unset res
     }
 
@@ -35,7 +36,7 @@ namespace eval ::acceptance::test {
 
     set snippet1 {
     # sugared procs, no macros
-        namespace eval some-namespace {
+        namespace eval macro-namespace {
 
         # proc using no macros
             sugar::proc ok-proc {} {
@@ -66,7 +67,7 @@ namespace eval ::acceptance::test {
 
     set snippet2 {
     # sugared procs with macro
-        namespace eval some-namespace {
+        namespace eval macro-namespace {
 
         # proc using no macros
             sugar::proc ok-proc {} {
@@ -107,7 +108,7 @@ namespace eval ::acceptance::test {
     } -setup $SETUP -cleanup $CLEANUP -body {
 
         if {1} $snippet1
-        return [some-namespace::result]
+        return [macro-namespace::result]
 
     } -result {ok coffee {one sugar}} -match glob
 
@@ -118,7 +119,7 @@ namespace eval ::acceptance::test {
     } -setup $SETUP -cleanup $CLEANUP -body {
 
         if {1} $snippet2
-        return [some-namespace::result]
+        return [macro-namespace::result]
 
     } -result {ok coffee {two sugars}} -match glob
 
@@ -131,10 +132,110 @@ namespace eval ::acceptance::test {
 
         if {1} $snippet2
         return [lsort [lmap procname \
-            [info procs some-namespace::*] \
+            [info procs macro-namespace::*] \
             {namespace tail $procname}]]
 
     } -result {get-drink ok-proc result two-sugars} -match glob
+
+    # -------------------------------------------------------------------------
+
+    # -------------------------------------------------------------------------
+
+    # Using sugar as a static checker, i.e. creatign macros for procs, existing
+    # or otherwise, that do some check before returning the same command the
+    # user entered.
+    
+    set SETUP {
+        set res {}
+    }
+    set CLEANUP {
+        namespace delete checker-namespace
+        catch {unset water_brew_called}
+        unset res
+    }
+    set snippet3 {
+        namespace eval checker-namespace {
+            # a proc we're going to have a macro checker for
+            proc brew {drink} {
+                switch $drink {
+                    "tea" {
+                        return "An English tipple"
+                    }
+                    "coffee" {
+                        return "The most popular drug in America"
+
+                    }
+                    "beer" {
+                        return "The real stuff"
+                    }
+                    default {
+                        return "What are you drinking?"
+                    }
+                }
+            }
+            # now a macro that will check for errors, note, we can't check for
+            # value errors. That's done at runtime
+            sugar::macro brew {cmd drink} {
+                set drinks {tea coffee beer}
+                # if the option was not a literal, we have no way of checking
+                set first [string index $drink 0]
+                if {$first eq {$}} {return [list $cmd $drink]}
+                if {$first eq {[}} {return [list $cmd $drink]}
+
+                # but if it was a literal, we can check a correct one was given
+                if {$drink ni $drinks} {
+                    # set this global so we know that this path was taken
+                    # because this happens at compile time, so Tcltest won't
+                    # pick it up
+                    global water_brew_called
+                    set water_brew_called 1
+                    puts  "Warning: invalid option $drink in [sugar::currentProcName]"
+
+                }
+
+                # we don't want to alter the command, so just return it as is
+                return [list $cmd $drink]
+            }
+            sugar::proc tea {} {
+                brew tea
+            }
+            sugar::proc coffee {} {
+                brew coffee
+            }
+            sugar::proc water {} {
+                brew water
+            }
+
+        }
+    }
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_4 {
+        Call the checker macro command with a valid call
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $snippet3
+        set res [checker-namespace::tea]
+
+    } -result {An English tipple} -match glob
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_5 {
+        Call the checker macro command with an invalid arg value
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $snippet3
+        set res [checker-namespace::water]
+        global water_brew_called
+        # static checks only issue a warning, so we set this flag to know if
+        # the static check was called
+        if $water_brew_called {
+            return true
+        }
+
+    } -result {true} -match glob
 
     # -------------------------------------------------------------------------
 
