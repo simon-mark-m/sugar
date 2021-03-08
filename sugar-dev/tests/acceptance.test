@@ -1,0 +1,144 @@
+#
+# Unit testing template
+
+# assume the tests are in the same location as the package
+::tcl::tm::path add [file dirname [pwd]]
+
+# Use Tcltest. Its not perfect but its simple and commonly available
+package require Tcl 8.6
+package require tcltest 2.4.1
+source "../sugar.tcl"
+
+eval tcltest::configure $argv
+
+# ----------------------------------------------------------------------------
+# Acceptance tests.
+#
+# These are tests aimed at the package as a whole. Constructing these first
+# as package did not start life with tests. So need to create some kind of
+# baseline / coverage, but trying to isolate functions for test
+# -----------------------------------------------------------------------------
+
+namespace import tcltest::test
+namespace eval ::acceptance::test {
+    namespace import ::tcltest::*
+
+    set SETUP {
+        set res {}
+    }
+    set CLEANUP {
+        namespace delete some-namespace
+        unset res
+    }
+
+    # -------------------------------------------------------------------------
+
+    set snippet1 {
+    # sugared procs, no macros
+        namespace eval some-namespace {
+
+        # proc using no macros
+            sugar::proc ok-proc {} {
+                return ok
+            }
+            sugar::proc hot-drink {} {
+                list coffee 
+            }
+            sugar::proc get-drink {} {
+                hot-drink
+            }
+            proc two-sugars {} {
+                return [list two sugars]
+            }
+            proc sugar? {} {
+                return [list one sugar]
+            }
+
+            # test calling them (in a sugared proc)
+            sugar::proc result {} {
+                lappend result [ok-proc]
+                lappend result [get-drink]
+                lappend result [sugar?]
+                return $result
+            }
+        }
+    }
+
+    set snippet2 {
+    # sugared procs with macro
+        namespace eval some-namespace {
+
+        # proc using no macros
+            sugar::proc ok-proc {} {
+                return ok
+            }
+            # macro that inlines creating a list
+            sugar::macro hot-drink {cmd} {
+                list list coffee 
+            }
+            # proc that uses a macros
+            sugar::proc get-drink {} {
+                hot-drink
+            }
+            # regular proc
+            proc two-sugars {} {
+                return [list two sugars]
+            }
+            # replace the sugar? proc from snippet1 with a
+            # macro that inlines the regular proc above
+            sugar::macro sugar? {cmd} {
+                list two-sugars
+            }
+
+            # test calling them (in a sugared proc)
+            sugar::proc result {} {
+                lappend result [ok-proc]
+                lappend result [get-drink]
+                lappend result [sugar?]
+                return $result
+            }
+        }
+    }
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_1 {
+        Run code with sugared procs, but no macros to substitute
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $snippet1
+        return [some-namespace::result]
+
+    } -result {ok coffee {one sugar}} -match glob
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_2 {
+        Run code with sugared procs, with  macros to substitute
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $snippet2
+        return [some-namespace::result]
+
+    } -result {ok coffee {two sugars}} -match glob
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_3 {
+        Sanity check, examine the procs in the namespace
+        i.e. the macros leave nothing behind
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $snippet2
+        return [lsort [lmap procname \
+            [info procs some-namespace::*] \
+            {namespace tail $procname}]]
+
+    } -result {get-drink ok-proc result two-sugars} -match glob
+
+    # -------------------------------------------------------------------------
+
+
+    cleanupTests
+}
+namespace delete ::acceptance::test

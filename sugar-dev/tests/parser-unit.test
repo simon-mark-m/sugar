@@ -1,0 +1,160 @@
+#
+# Unit testing template
+
+# assume the tests are in the same location as the package
+::tcl::tm::path add [file dirname [pwd]]
+
+# Use Tcltest. Its not perfect but its simple and commonly available
+package require Tcl 8.6
+package require tcltest 2.4.1
+source "../sugar.tcl"
+
+eval tcltest::configure $argv
+
+# ----------------------------------------------------------------------------
+# Tests mostly focussed on the parser.
+#
+# These tests were added after the fact, and therefore it follows the parser
+# was not written with testability in mind. There's a bewildering range of
+# possible combinations the parser could encounter so it's quite likely some of
+# these tests overlap.
+# However, they should be sufficient to provide a 'harness' that will break
+# if you make any mistakes working on the parser code.
+# The parser works by parsing the top level string until it encounters EOF
+# so most of the tests take advantage of this
+# -----------------------------------------------------------------------------
+# TODO These test will be rationalised once the parser itself has been 
+# refactored, therefore for now these are 'protective' tests to allow that
+# work to happen, although the code is pretty solid, so I don't plan on 
+# factoring stuff out until there's a need to change the parser
+# -----------------------------------------------------------------------------
+
+namespace import tcltest::test
+namespace eval ::parser::test {
+    namespace import ::tcltest::*
+
+    set SETUP {
+        set code  {}
+        set i 0
+        set statevar {}
+        set tokenvar {}
+        set res {}
+    }
+    set CLEANUP {
+        unset code
+        unset i 
+        unset statevar
+        unset tokenvar
+        unset res
+    }
+
+    # -------------------------------------------------------------------------
+
+    test parse_1 {
+        Parse a basic bit of code
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {string trim $var}
+        set     res  [sugar::parser $code tokenvar i statevar]
+        lappend res  $i $statevar $tokenvar
+
+    } -result {TOK 6 TOK string} -match glob
+
+    # -------------------------------------------------------------------------
+
+    test parse_2 {
+        Parse a basic bit of code
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {lindex $myvar 0}
+        set     res  [sugar::parser $code tokenvar i statevar]
+        lappend res  $i $statevar $tokenvar
+
+    } -result {TOK 6 TOK lindex} -match glob
+
+    # -------------------------------------------------------------------------
+
+    test parse_3 {
+        Parse a basic bit of code with comment
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {lindex $myvar 0 # My comment}
+        set     res  [sugar::parser $code tokenvar i statevar]
+        lappend res  $i $statevar $tokenvar
+
+    } -result {TOK 6 TOK lindex} -match glob
+
+    # -------------------------------------------------------------------------
+    
+    test parse_4 {
+        Parse a basic bit of code with substitution command
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {lindex [lindex $myvar 0] 1}
+        while {1} {
+            set tok  [sugar::parser $code tokenvar i statevar]
+            lappend res $tok
+            lappend res  $i $statevar $tokenvar
+            if {$tok eq "EOF"} {
+                return $res
+            }
+        }
+
+    } -result {TOK 6 TOK lindex SPACE 7 SPACE { } TOK 24 TOK {[lindex $myvar 0]} SPACE 25 SPACE { } TOK 26 TOK 1 EOF 26 EOF {}}
+
+    # -------------------------------------------------------------------------
+    
+    test parse_5 {
+        Parse a basic bit of code which has two commands
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {lindex [lindex $myvar 0] 1 ; lindex [lindex $myvar 0] 1 }
+        while {1} {
+            set tok  [sugar::parser $code tokenvar i statevar]
+            lappend res $tok
+            lappend res  $i $statevar $tokenvar
+            if {$tok eq "EOF"} {
+                return $res
+            }
+        }
+    } -result {TOK 6 TOK lindex SPACE 7 SPACE { } TOK 24 TOK {[lindex $myvar 0]} SPACE 25 SPACE { } TOK 26 TOK 1 SPACE 27 SPACE { } EOL 28 EOL {;} SPACE 29 SPACE { } TOK 35 TOK lindex SPACE 36 SPACE { } TOK 53 TOK {[lindex $myvar 0]} SPACE 54 SPACE { } TOK 55 TOK 1 SPACE 56 SPACE { } EOF 56 EOF {}}
+    
+    # -------------------------------------------------------------------------
+
+    test parse_6 {
+        Parse a line that contains a variety of Tcl syntax
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {string map [list @tag@ $tag] "This; is @tag@ $tag"}
+        while {1} {
+            set tok  [sugar::parser $code tokenvar i statevar]
+            lappend res $tok
+            lappend res  $i $statevar $tokenvar
+            if {$tok eq "EOF"} {
+                return $res
+            }
+        }
+    } -result {TOK 6 TOK string SPACE 7 SPACE { } TOK 10 TOK map SPACE 11 SPACE { } TOK 28 TOK {[list @tag@ $tag]} SPACE 29 SPACE { } TOK 50 TOK {"This; is @tag@ $tag"} EOF 50 EOF {}}
+
+    #--------------------------------------------------------------------
+
+    test parse_7 {
+        Parsing a line with expansion {*} in it
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        set     code {{*}$cmd}
+        while {1} {
+            set tok  [sugar::parser $code tokenvar i statevar]
+            lappend res $tok
+            lappend res  $i $statevar $tokenvar
+            if {$tok eq "EOF"} {
+                return $res
+            }
+        }
+    } -result {TOK 7 TOK {{*}$cmd} EOF 7 EOF {}}
+
+    #--------------------------------------------------------------------
+
+    cleanupTests
+}
+namespace delete ::parser::test

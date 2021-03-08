@@ -1,0 +1,32 @@
+#
+# Unit testing template
+
+# assume the tests are in the same location as the package
+::tcl::tm::path add [file dirname [pwd]]
+
+# Use Tcltest. Its not perfect but its simple and commonly available
+package require Tcl 8.6
+package require tcltest 2.4.1
+source "../sugar.tcl"
+
+eval tcltest::configure $argv
+
+namespace import tcltest::test
+namespace eval ::boiler::test {
+    namespace import ::tcltest::*
+
+
+    test _1 {
+    } -setup {
+        set res {}
+    } -cleanup { 
+        unset res
+    } -body {
+    } -result {} -match glob
+
+
+
+
+    cleanupTests 
+}
+namespace delete ::boiler::test
