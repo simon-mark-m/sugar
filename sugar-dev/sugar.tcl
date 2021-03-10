@@ -99,11 +99,10 @@ proc sugar::parser {text tokenvar indexvar statevar {dosubst 0}} {
         # skip comments
         if {$state eq {EOL} && !$dontstop && [string equal [string index $text $i] #]} {
             while {[string length [string index $text $i]] &&
-                   ![string match [string index $text $i] \n]} \
-            {
+                   ![string match [string index $text $i] \n]} {
                 append token [string index $text $i]
                 incr i
-        }
+            }
         }
         # return a SPACE token if needed
         if {[string length $token]} {return [set state SPACE]}
@@ -422,18 +421,18 @@ proc sugar::expand script {
                 if {[sugar::lookupMacro $cmdname expander]} {
                 #puts "executing macro for $cmdname in procedure [::sugar::currentProcName]"
                     if {[catch {set tokens [eval $expander [::sugar::tokens $argv]]} errstr]} {
-                    error "Macro '$cmdname' expansion error in procedure '$::sugar::currentprocedure': $errstr" $::errorInfo
+                        error "Macro '$cmdname' expansion error in procedure '$::sugar::currentprocedure': $errstr" $::errorInfo
+                    }
+                    set argv [::sugar::interleaveSpaces $tokens $argv]
                 }
-                set argv [::sugar::interleaveSpaces $tokens $argv]
+                # Call all the syntax macros. For now in random order.
+                foreach syntaxmacro [info command ::sugar::syntaxmacro::__macroproc__*] {
+                    set argv [::sugar::interleaveSpaces [eval $syntaxmacro [::sugar::tokens $argv]] $argv]
+                }
             }
-            # Call all the syntax macros. For now in random order.
-            foreach syntaxmacro [info command ::sugar::syntaxmacro::__macroproc__*] {
-                set argv [::sugar::interleaveSpaces [eval $syntaxmacro [::sugar::tokens $argv]] $argv]
+            foreach arg $argv {
+                append result "[lindex $arg 1]"
             }
-        }
-        foreach arg $argv {
-            append result "[lindex $arg 1]"
-        }
         }
         # Call all the transformer macros. For now in random order.
         # TODO: consider if it's better to move this as first
@@ -681,6 +680,7 @@ sugar::macro switch args {
     }
     lappend result [lindex $args $idx]
     incr idx
+    
     # Handle the two forms in two different ways
     if {[llength $args]-$idx == 1} {
         set l [lindex $args $idx 0]
@@ -774,23 +774,23 @@ proc sugar::tailrec_convert_calls {name arglist code} {
     } elseif {$cmdname eq {if}} {
     #puts "IF CALL"
         for {set j 0} {$j < [llength $cmd]} {incr j} {
-        if {[lindex $cmd $j 0] ne {TOK}} continue 
-        switch -- [lindex $cmd $j 1] {
-        if - elseif {
-        incr j 2
+            if {[lindex $cmd $j 0] ne {TOK}} continue 
+            switch -- [lindex $cmd $j 1] {
+                if - elseif {
+                    incr j 2
+                }
+                else {
+                    incr j 1
+                }
+                default {
+                    set script [lindex $code $lastidx $j 1]
+                    #puts "$j -> $script"
+                    set scriptcode [sugar::scriptToList [lindex $script 0]]
+                    set converted [sugar::tailrec_convert_calls $name $arglist $scriptcode]
+                    lset code $lastidx $j 1 [list [sugar::listToScript $converted]]
+                }
+            }
         }
-        else {
-        incr j 1
-        }
-        default {
-        set script [lindex $code $lastidx $j 1]
-        #puts "$j -> $script"
-        set scriptcode [sugar::scriptToList [lindex $script 0]]
-        set converted [sugar::tailrec_convert_calls $name $arglist $scriptcode]
-        lset code $lastidx $j 1 [list [sugar::listToScript $converted]]
-        }
-        }
-        }
-        }
-        return $code
-        }
+    }
+    return $code
+}

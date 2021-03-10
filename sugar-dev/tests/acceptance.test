@@ -183,8 +183,8 @@ namespace eval ::acceptance::test {
                 # if the option was not a literal, we have no way of checking
                 # what the arguments might be
                 set first [string index $drink 0]
-                if {$first eq {$}} {return [list $cmd $drink]}
-                if {$first eq {[}} {return [list $cmd $drink]}
+                if {$first eq {$}}                      {return [list $cmd $drink]}
+                if {$first eq {[}}                      {return [list $cmd $drink]}
                 if {[string range $drink 0 2] eq {{*}}} {return [list $cmd $drink]}
 
                 # but if it *was* a literal, we can check a correct one was given
@@ -291,7 +291,72 @@ namespace eval ::acceptance::test {
     } -result {What are you drinking?}
 
     # -------------------------------------------------------------------------
+    
+    # -------------------------------------------------------------------------
 
+    # Using sugar for a control structure, overlaps with the above tests, but
+    # is a useful example in its own right
+
+    set SETUP {
+        set res {}
+    }
+    set CLEANUP {
+        namespace delete control-namespace
+        unset res
+    }
+
+    set control_snippet1 {
+        namespace eval control-namespace {
+
+            sugar::macro cond {cmd args} {
+
+                if {[llength $args] != 3} {
+                    error "wrong number of arguments"
+                }
+
+                foreach {cond val1 val2} $args break
+                list if $cond [list [list format $val1]] [list [list format $val2]]
+
+            }
+
+            # we only need this wrapper to 'sugar' the call the 'cond' for
+            # testing purposes
+            sugar::proc do-cond {} {
+
+                set x 1
+                lappend res [cond {$x > 0} 1 0]
+
+                set x 0
+                lappend res [cond {$x > 0} 1 0]
+
+                return $res
+
+            }
+
+            namespace export cond
+        }
+    }
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_control_1 {
+        USe our new macro implemented operator
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $control_snippet1
+
+        # this works, macros are effectively 'global'
+        sugar::proc call-from-here {} {
+            set x 1
+            return [cond {$x > 0} 1 0]
+        }
+
+        lappend res [control-namespace::do-cond]
+        lappend res [call-from-here]
+
+    } -result {{1 0} 1}
+
+    # -------------------------------------------------------------------------
 
 
 
