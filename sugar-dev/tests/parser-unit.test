@@ -78,11 +78,11 @@ namespace eval ::parser::test {
         Parse a basic bit of code with comment
     } -setup $SETUP -cleanup $CLEANUP -body {
 
-        set     code {lindex $myvar 0 # My comment}
+        set     code {# My comment}
         set     res  [sugar::parser $code tokenvar i statevar]
         lappend res  $i $statevar $tokenvar
 
-    } -result {TOK 6 TOK lindex} -match glob
+    } -result {TOK 1 TOK #} -match glob
 
     # -------------------------------------------------------------------------
     

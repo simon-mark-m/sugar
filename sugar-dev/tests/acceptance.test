@@ -40,6 +40,7 @@ namespace eval ::acceptance::test {
 
         # proc using no macros
             sugar::proc ok-proc {} {
+                # a comment - for testing
                 return ok
             }
             sugar::proc hot-drink {} {
@@ -105,6 +106,7 @@ namespace eval ::acceptance::test {
 
     test acceptance_basic_1 {
         Run code with sugared procs, but no macros to substitute
+        This will also cover off parsing various bits of syntax etc.
     } -setup $SETUP -cleanup $CLEANUP -body {
 
         if {1} $basic_snippet1
@@ -357,9 +359,58 @@ namespace eval ::acceptance::test {
     } -result {{1 0} 1}
 
     # -------------------------------------------------------------------------
+    
+    # -------------------------------------------------------------------------
+
+    # using sugar for syntax macros
+
+    set SETUP {
+        set res {}
+    }
+    set CLEANUP {
+        namespace delete syntax-namespace
+        unset res
+    }
+
+    set syntax_snippet1 {
+        namespace eval syntax-namespace {
+
+            # Just replaces the whatever value return would normally send
+            # with the word "Dolly"
+            sugar::syntaxmacro dolittle args {
+                if {[lindex $args 0] eq "return"} {
+                    lset args 1 Dolly
+                }
+                return $args
+            }
+
+            sugar::proc doevenless {} {
+                return Hello
+            }
+            
+            # and just to be sure
+            proc donowt {} {
+                return Hello
+            }
+
+        }
+    }
+
+    # -------------------------------------------------------------------------
+
+    test acceptance_syntax_1 {
+        Just chech the syntax macro is getting called each time
+    } -setup $SETUP -cleanup $CLEANUP -body {
+
+        if {1} $syntax_snippet1
+        lappend res [syntax-namespace::donowt]
+        lappend res [syntax-namespace::doevenless]
 
 
+    } -result {Hello Dolly}
 
+    # -------------------------------------------------------------------------
+    
 
     cleanupTests
 }
