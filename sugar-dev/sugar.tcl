@@ -29,7 +29,7 @@
 #   (DONE: Fixed thanks to another related bug found by NEM).
 # - An API to provide unique variable names for macro expansions.
 
-package provide sugar 0.1
+package provide sugar 0.2
 
 namespace eval sugar {}
 namespace eval sugar::macro {}
